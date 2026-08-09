@@ -221,8 +221,15 @@ async function exportGif(
     const imageData = ctx.getImageData(0, 0, canvasW, canvasH);
     const { data, width, height } = imageData;
 
-    const palette = quantize(data, 256, { format: 'rgba4444' });
+    // Reserve palette slot 0 for transparency and force fully transparent
+    // pixels to quantize to it, so the GIF's transparentIndex resolves to a
+    // true transparent slot instead of a near-black opaque color.
+    const palette = quantize(data, 255, { format: 'rgba4444' });
+    palette.unshift(0, 0, 0, 0);
     const index = applyPalette(data, palette, 'rgba4444');
+    for (let p = 0; p < index.length; p++) {
+      if (data[p * 4 + 3] === 0) index[p] = 0;
+    }
 
     const actualDuration = (resolved[i].config.duration ?? 160) / speed;
     const delay = Math.max(20, Math.round(actualDuration));

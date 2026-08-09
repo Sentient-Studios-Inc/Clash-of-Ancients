@@ -119,6 +119,57 @@ function stripBackground(
   });
 }
 
+/**
+ * Four-way flood fill from the image borders. A pixel joins the fill only if
+ * its RGB distance to the estimated background color is within `tol2`, so the
+ * fill stops at the sprite outline and cannot reach enclosed background-
+ * colored regions (e.g. the inside of a hollow sprite). Returns a boolean
+ * mask the same length as `w * h`.
+ */
+function findEdgeConnectedBackground(
+  px: Uint8ClampedArray,
+  w: number,
+  h: number,
+  bg: number[],
+  tol2: number,
+): Uint8Array {
+  const mask = new Uint8Array(w * h);
+  const stack: number[] = [];
+  const matches = (pixel: number) => {
+    const i = pixel * 4;
+    const dr = px[i] - bg[0];
+    const dg = px[i + 1] - bg[1];
+    const db = px[i + 2] - bg[2];
+    return dr * dr + dg * dg + db * db <= tol2;
+  };
+  const push = (x: number, y: number) => {
+    if (x < 0 || x >= w || y < 0 || y >= h) return;
+    const pixel = y * w + x;
+    if (mask[pixel]) return;
+    if (!matches(pixel)) return;
+    mask[pixel] = 1;
+    stack.push(pixel);
+  };
+  for (let x = 0; x < w; x++) {
+    push(x, 0);
+    push(x, h - 1);
+  }
+  for (let y = 0; y < h; y++) {
+    push(0, y);
+    push(w - 1, y);
+  }
+  while (stack.length) {
+    const pixel = stack.pop()!;
+    const x = pixel % w;
+    const y = (pixel / w) | 0;
+    push(x - 1, y);
+    push(x + 1, y);
+    push(x, y - 1);
+    push(x, y + 1);
+  }
+  return mask;
+}
+
 function estimateEdgeBackground(px: Uint8ClampedArray, w: number, h: number): number[] {
   const rs: number[] = [];
   const gs: number[] = [];
