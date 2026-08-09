@@ -17,7 +17,6 @@ interface CreatureProps {
 
 export function Creature({
   name,
-  side,
   position,
   size,
   children,

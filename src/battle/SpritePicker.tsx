@@ -112,7 +112,7 @@ export function SpritePicker({ slot, label }: SpritePickerProps) {
                     title={f.label}
                   >
                     <img
-                      src={f.src}
+                      src={f.src ?? undefined}
                       alt={f.label}
                       className="h-full w-full object-contain"
                       style={{ imageRendering: 'pixelated' }}
@@ -142,3 +142,6 @@ export function SpritePicker({ slot, label }: SpritePickerProps) {
     </div>
   );
 }
+
+
+export { SpritePicker }
