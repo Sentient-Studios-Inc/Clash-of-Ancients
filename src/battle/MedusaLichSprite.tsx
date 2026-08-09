@@ -11,31 +11,38 @@ const spriteModules = import.meta.glob<{ default: string }>(
   { eager: true },
 );
 
-const imageCache: Record<string, string> = {};
+const STATE_ALIASES: Record<string, string> = {
+  preempt: 'hit',
+  prempt: 'hit',
+};
+
+interface RawEntry {
+  state: string;
+  frameNum: number;
+  src: string;
+}
+
+const rawEntries: RawEntry[] = [];
 for (const [path, mod] of Object.entries(spriteModules)) {
   const filename = (path.split('/').pop() ?? '').toLowerCase();
   const stateMatch = filename.match(/idle|strike|brace|preempt|prempt|hit|special|death/);
   if (!stateMatch) continue;
   const raw = stateMatch[0];
-  const stateName =
-    raw === 'preempt' || raw === 'prempt' ? 'hit' : raw;
+  const stateName = STATE_ALIASES[raw] ?? raw;
   const numMatch = filename.match(/(\d+)/);
-  const n = numMatch ? numMatch[1] : '1';
-  imageCache[`${stateName}-${n}`] = mod.default;
+  const frameNum = numMatch ? parseInt(numMatch[1], 10) : 1;
+  rawEntries.push({ state: stateName, frameNum, src: mod.default });
 }
 
-function makeFrames(stateKey: string, label: string, duration: number, maxCount = 12): FrameConfig[] {
-  const frames: FrameConfig[] = [];
-  for (let i = 1; i <= maxCount; i++) {
-    const cacheKey = `${stateKey}-${i}`;
-    if (!imageCache[cacheKey]) continue;
-    frames.push({
-      src: imageCache[cacheKey],
-      label: `${label} ${i}`,
+function makeFrames(stateKey: string, label: string, duration: number): FrameConfig[] {
+  return rawEntries
+    .filter((e) => e.state === stateKey)
+    .sort((a, b) => a.frameNum - b.frameNum)
+    .map((e, i) => ({
+      src: e.src,
+      label: `${label} ${i + 1}`,
       duration,
-    });
-  }
-  return frames;
+    }));
 }
 
 const FRAMES: StateFrameMap = {
@@ -82,3 +89,6 @@ export function MedusaLichSprite({ state, showDebug = false, paused = false, spe
     />
   );
 }
+
+
+export { MedusaLichSprite }
