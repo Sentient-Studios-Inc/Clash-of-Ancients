@@ -225,7 +225,7 @@ async function exportGif(
     const index = applyPalette(data, palette, 'rgba4444');
 
     const actualDuration = (resolved[i].config.duration ?? 160) / speed;
-    const delay = Math.max(20, Math.round(actualDuration / 10));
+    const delay = Math.max(20, Math.round(actualDuration));
 
     encoder.writeFrame(index, width, height, {
       palette,
