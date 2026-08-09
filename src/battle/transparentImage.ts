@@ -80,21 +80,25 @@ function stripBackground(
 
         const t2 = threshold * threshold;
         const f2 = feather * feather;
+        const background = findEdgeConnectedBackground(px, w, h, bg, t2 + f2);
         const rowCounts = new Array(h).fill(0);
         let contentLeft = w;
         let contentRight = -1;
         for (let y = 0; y < h; y++) {
           for (let x = 0; x < w; x++) {
-            const i = (y * w + x) * 4;
+            const pixel = y * w + x;
+            const i = pixel * 4;
             const dr = px[i] - bg[0];
             const dg = px[i + 1] - bg[1];
             const db = px[i + 2] - bg[2];
             const dist2 = dr * dr + dg * dg + db * db;
-            if (dist2 <= t2) {
-              px[i + 3] = 0;
-            } else if (dist2 < t2 + f2) {
-              const t = (dist2 - t2) / f2;
-              px[i + 3] = Math.min(px[i + 3], Math.round(t * 255));
+            if (background[pixel]) {
+              if (dist2 <= t2) {
+                px[i + 3] = 0;
+              } else if (dist2 < t2 + f2) {
+                const t = (dist2 - t2) / f2;
+                px[i + 3] = Math.min(px[i + 3], Math.round(t * 255));
+              }
             }
             if (px[i + 3] > 16) {
               rowCounts[y]++;
