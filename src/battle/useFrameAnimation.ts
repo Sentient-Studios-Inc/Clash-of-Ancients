@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CreatureState } from './types';
 
 export interface FrameConfig {
@@ -35,9 +35,16 @@ interface UseFrameAnimationProps {
 
 /**
  * Cycles through frame configs for the creature's current state.
- * When the state changes, the frame index resets to 0.
- * If `loop` is false (default for one-shot animations like hit/strike),
- * the index holds on the last frame after the cycle completes.
+ *
+ * Timing is driven by a requestAnimationFrame loop that measures real elapsed
+ * time against each frame's duration, so every frame — including the last one
+ * before a loop wraps — holds for exactly its configured duration. There is no
+ * accumulated drift, because advancing is based on a clock rather than assumed
+ * from setTimeout precision.
+ *
+ * When the state changes, the frame index resets to 0. If `loop` is false
+ * (default for one-shot animations like hit/strike), the index holds on the
+ * last frame after the cycle completes.
  */
 export function useFrameAnimation({ state, frames, loop = false, paused = false, speed = 1 }: UseFrameAnimationProps) {
   const [index, setIndex] = useState(0);
@@ -48,29 +55,75 @@ export function useFrameAnimation({ state, frames, loop = false, paused = false,
   );
   const isLooping = loop || state === 'idle' || state === 'special-charge';
 
-  useEffect(() => {
-    setIndex(0);
-  }, [state]);
+  // Refs let the rAF loop read the latest paused/speed/looping values without
+  // restarting the loop (which would reset timing) on every toggle.
+  const indexRef = useRef(0);
+  const rafRef = useRef<number | null>(null);
+  const frameStartRef = useRef<number | null>(null);
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
+  const speedRef = useRef(speed);
+  speedRef.current = speed;
+  const isLoopingRef = useRef(isLooping);
+  isLoopingRef.current = isLooping;
 
   useEffect(() => {
     if (stateFrames.length === 0) return;
-    const current = stateFrames[index];
-    if (!current) {
-      setIndex(0);
-      return;
-    }
 
-    const atEnd = index >= stateFrames.length - 1;
-    if (atEnd && !isLooping) return;
-    if (paused) return;
+    // Reset to the first frame whenever the state (or its frame set) changes.
+    indexRef.current = 0;
+    frameStartRef.current = null;
+    setIndex(0);
 
-    const scaledDuration = Math.max(16, current.duration / speed);
-    const timer = setTimeout(() => {
-      setIndex((i) => (i >= stateFrames.length - 1 ? (isLooping ? 0 : i) : i + 1));
-    }, scaledDuration);
+    const tick = (now: number) => {
+      const sFrames = stateFrames;
+      if (sFrames.length === 0) {
+        rafRef.current = requestAnimationFrame(tick);
+        return;
+      }
 
-    return () => clearTimeout(timer);
-  }, [index, state, stateFrames, isLooping, paused, speed]);
+      if (pausedRef.current) {
+        // Hold without accumulating elapsed time while paused.
+        frameStartRef.current = now;
+        rafRef.current = requestAnimationFrame(tick);
+        return;
+      }
+
+      if (frameStartRef.current === null) frameStartRef.current = now;
+
+      const current = sFrames[indexRef.current];
+      if (!current) {
+        indexRef.current = 0;
+        setIndex(0);
+        frameStartRef.current = now;
+        rafRef.current = requestAnimationFrame(tick);
+        return;
+      }
+
+      const atEnd = indexRef.current >= sFrames.length - 1;
+      if (atEnd && !isLoopingRef.current) {
+        // One-shot animation: hold on the last frame and stop the loop.
+        return;
+      }
+
+      const sp = Math.max(0.1, speedRef.current);
+      const scaledDuration = Math.max(16, current.duration / sp);
+      const elapsed = now - frameStartRef.current;
+      if (elapsed >= scaledDuration) {
+        indexRef.current =
+          indexRef.current >= sFrames.length - 1 ? 0 : indexRef.current + 1;
+        setIndex(indexRef.current);
+        frameStartRef.current = now;
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    };
+  }, [state, stateFrames]);
 
   const currentFrame = stateFrames[index] ?? stateFrames[0] ?? null;
   const frameNumber = index + 1;
