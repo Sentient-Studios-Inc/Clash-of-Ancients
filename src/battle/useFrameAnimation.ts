@@ -60,7 +60,6 @@ export function useFrameAnimation({ state, frames, loop = false, paused = false,
   const indexRef = useRef(0);
   const rafRef = useRef<number | null>(null);
   const frameStartRef = useRef<number | null>(null);
-  const prevFrameActualDurationRef = useRef<number>(0);
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
   const speedRef = useRef(speed);
@@ -108,16 +107,9 @@ export function useFrameAnimation({ state, frames, loop = false, paused = false,
       }
 
       const sp = Math.max(0.1, speedRef.current);
-      let scaledDuration = Math.max(16, current.duration / sp);
-      // Rule: the last frame of a looping animation must display for the same
-      // amount of time the previous frame actually held, not its own configured
-      // duration. This prevents the last frame from being cut short at the wrap.
-      if (atEnd && isLoopingRef.current && prevFrameActualDurationRef.current > 0) {
-        scaledDuration = prevFrameActualDurationRef.current;
-      }
+      const scaledDuration = Math.max(16, current.duration / sp);
       const elapsed = now - frameStartRef.current;
       if (elapsed >= scaledDuration) {
-        prevFrameActualDurationRef.current = elapsed;
         indexRef.current =
           indexRef.current >= sFrames.length - 1 ? 0 : indexRef.current + 1;
         setIndex(indexRef.current);
