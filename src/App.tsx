@@ -12,41 +12,37 @@ function App() {
   const [overrides, setOverrides] = useState<SpriteOverrides>({});
 
   // Hydrate persisted overrides from IndexedDB on mount.
-  const hydratedRef = useRef(false);
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       const restored = await hydrateOverrides();
       if (cancelled || !restored) return;
-      hydratedRef.current = true;
       setOverrides(restored);
     })();
     return () => { cancelled = true; };
   }, []);
 
-  // Re-warm the background-strip cache for restored frames so playback is
-  // aligned from the first frame. Queued (not concurrent) to avoid spiking
-  // the main thread with many canvas pixel-processing jobs at once.
-  const warmedRef = useRef(false);
+  // Pre-warm the background-strip cache for all frames so playback is
+  // aligned from the first frame. Process frames in parallel so warming
+  // completes before the first animation cycle can reach the last frame.
+  // Re-runs on every overrides change; cached frames return instantly.
   useEffect(() => {
-    if (warmedRef.current) return;
-    if (!hydratedRef.current) return;
-    warmedRef.current = true;
     let cancelled = false;
     void (async () => {
+      const tasks: Promise<unknown>[] = [];
       for (const slot of ['cyclops', 'medusa'] as const) {
         const frames = overrides[slot];
         if (!frames) continue;
         for (const stateFrames of Object.values(frames)) {
           for (const f of stateFrames) {
-            if (cancelled) return;
-            if (f.src) await transparentSrcAsync(f.src);
+            if (f.src) tasks.push(transparentSrcAsync(f.src));
           }
         }
       }
+      await Promise.all(tasks);
+      if (cancelled) return;
     })();
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overrides]);
 
   // Persist whenever overrides change (debounced inside saveOverrides).

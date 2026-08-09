@@ -7,6 +7,10 @@ const PREVIEW_STATES: CreatureState[] = ['idle', 'strike', 'brace', 'death'];
 // Minimum hold so even a 1-frame state stays visible long enough to read.
 const MIN_HOLD = 700;
 
+// Extra time added beyond the frame total so the per-frame animation always
+// finishes its last frame before the preview switches to the next state.
+const COMPLETION_BUFFER = 120;
+
 function holdForState(frames: StateFrameMap | undefined, state: CreatureState): number {
   const stateFrames = frames?.[state];
   if (!stateFrames || stateFrames.length === 0) {
@@ -14,8 +18,9 @@ function holdForState(frames: StateFrameMap | undefined, state: CreatureState): 
     return 1200;
   }
   const total = stateFrames.reduce((sum, f) => sum + f.duration, 0);
-  // One full play-through of the state's frames, floored at MIN_HOLD.
-  return Math.max(MIN_HOLD, total);
+  // One full play-through of the state's frames plus a completion buffer
+  // so the last frame holds for its full duration, floored at MIN_HOLD.
+  return Math.max(MIN_HOLD, total + COMPLETION_BUFFER);
 }
 
 export function useSpritePreview(

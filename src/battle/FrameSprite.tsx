@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 import type { FrameConfig } from './useFrameAnimation';
 import { transparentSrcAsync, transparentSrcSync, type ContentBounds } from './transparentImage';
 import { placeFrame } from './frameLayout';
@@ -37,7 +37,7 @@ export function FrameSprite({
   const [bounds, setBounds] = useState<ContentBounds | null>(null);
   const [imgNatural, setImgNatural] = useState<{ w: number; h: number } | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!frame?.src) {
       setProcessedUrl(null);
       setBounds(null);
@@ -51,8 +51,12 @@ export function FrameSprite({
       setProcessedUrl(cached.url);
       setBounds(cached.bounds);
       setImgNatural({ w: cached.bounds.width, h: cached.bounds.height });
+      return;
     }
 
+    setProcessedUrl(null);
+    setBounds(null);
+    setImgNatural(null);
     void transparentSrcAsync(frame.src).then(({ url, bounds: b }) => {
       if (cancelled) return;
       setProcessedUrl(url);
