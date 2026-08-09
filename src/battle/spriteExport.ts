@@ -15,6 +15,8 @@ export interface ExportOptions {
   format: ExportFormat;
   /** Pixel-density multiplier for crisp output. Default 2. */
   pixelRatio?: number;
+  /** Playback speed multiplier to match on-screen timing. Default 1. */
+  speed?: number;
 }
 
 export interface ExportResult {
@@ -122,16 +124,55 @@ export async function exportSprite(opts: ExportOptions): Promise<ExportResult> {
   return exportGif(resolved, opts, pixelRatio, sideLabel);
 }
 
+function computeFrameBounds(
+  resolved: ResolvedFrame[],
+  opts: ExportOptions,
+): { minX: number; minY: number; contentW: number; contentH: number } {
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const r of resolved) {
+    if (r.naturalW <= 0 || r.naturalH <= 0) continue;
+    const placement = placeFrame(
+      r.config,
+      opts.width,
+      opts.height,
+      opts.facing,
+      { w: r.naturalW, h: r.naturalH },
+      r.bounds,
+    );
+    const left = placement.img.left;
+    const right = placement.img.left + placement.img.width;
+    const top = opts.height - placement.img.height - placement.img.bottom;
+    const bottom = top + placement.img.height;
+    minX = Math.min(minX, left);
+    maxX = Math.max(maxX, right);
+    minY = Math.min(minY, top);
+    maxY = Math.max(maxY, bottom);
+  }
+  if (!Number.isFinite(minX)) {
+    return { minX: 0, minY: 0, contentW: opts.width, contentH: opts.height };
+  }
+  return {
+    minX: Math.floor(minX),
+    minY: Math.floor(minY),
+    contentW: Math.ceil(maxX - minX),
+    contentH: Math.ceil(maxY - minY),
+  };
+}
+
 async function exportSpriteSheet(
   resolved: ResolvedFrame[],
   opts: ExportOptions,
   pixelRatio: number,
   sideLabel: string,
 ): Promise<ExportResult> {
+  const bounds = computeFrameBounds(resolved, opts);
   const cols = Math.min(8, resolved.length);
   const rows = Math.ceil(resolved.length / cols);
-  const cellW = opts.width * pixelRatio;
-  const cellH = opts.height * pixelRatio;
+  const cellW = bounds.contentW * pixelRatio;
+  const cellH = bounds.contentH * pixelRatio;
 
   const canvas = document.createElement('canvas');
   canvas.width = cols * cellW;
@@ -144,7 +185,7 @@ async function exportSpriteSheet(
   resolved.forEach((r, i) => {
     const col = i % cols;
     const row = Math.floor(i / cols);
-    drawFrame(ctx, r, opts.width, opts.height, opts.facing, pixelRatio, col * cellW, row * cellH);
+    drawFrame(ctx, r, opts.width, opts.height, opts.facing, pixelRatio, col * bounds.contentW - bounds.minX, row * bounds.contentH - bounds.minY);
   });
 
   const blob = await canvasToBlob(canvas, 'image/png');
@@ -158,8 +199,9 @@ async function exportGif(
   pixelRatio: number,
   sideLabel: string,
 ): Promise<ExportResult> {
-  const canvasW = opts.width * pixelRatio;
-  const canvasH = opts.height * pixelRatio;
+  const bounds = computeFrameBounds(resolved, opts);
+  const canvasW = bounds.contentW * pixelRatio;
+  const canvasH = bounds.contentH * pixelRatio;
 
   const encoder = GIFEncoder();
   const canvas = document.createElement('canvas');
@@ -170,9 +212,11 @@ async function exportGif(
 
   ctx.imageSmoothingEnabled = false;
 
+  const speed = Math.max(0.1, opts.speed ?? 1);
+
   for (let i = 0; i < resolved.length; i++) {
     ctx.clearRect(0, 0, canvasW, canvasH);
-    drawFrame(ctx, resolved[i], opts.width, opts.height, opts.facing, pixelRatio);
+    drawFrame(ctx, resolved[i], opts.width, opts.height, opts.facing, pixelRatio, -bounds.minX, -bounds.minY);
 
     const imageData = ctx.getImageData(0, 0, canvasW, canvasH);
     const { data, width, height } = imageData;
@@ -180,7 +224,8 @@ async function exportGif(
     const palette = quantize(data, 256, { format: 'rgba4444' });
     const index = applyPalette(data, palette, 'rgba4444');
 
-    const delay = Math.max(20, Math.round((resolved[i].config.duration ?? 160) / 10));
+    const actualDuration = (resolved[i].config.duration ?? 160) / speed;
+    const delay = Math.max(20, Math.round(actualDuration / 10));
 
     encoder.writeFrame(index, width, height, {
       palette,

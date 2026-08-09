@@ -131,6 +131,7 @@ export function BattleScreen() {
         facing: slot === 'medusa' ? 'right' : 'left',
         slot,
         format,
+        speed: slot === 'medusa' ? rightSpeed : leftSpeed,
       });
       downloadBlob(result.blob, result.filename);
       setExportMessage(`Downloading ${result.filename}…`);
