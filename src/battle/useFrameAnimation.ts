@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { CreatureState } from './types';
 
 export interface FrameConfig {
@@ -41,9 +41,11 @@ interface UseFrameAnimationProps {
  */
 export function useFrameAnimation({ state, frames, loop = false, paused = false, speed = 1 }: UseFrameAnimationProps) {
   const [index, setIndex] = useState(0);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const stateFrames = frames[state] ?? frames['idle'] ?? [];
+  const stateFrames = useMemo(
+    () => frames[state] ?? frames['idle'] ?? [],
+    [frames, state],
+  );
   const isLooping = loop || state === 'idle' || state === 'special-charge';
 
   useEffect(() => {
@@ -63,13 +65,11 @@ export function useFrameAnimation({ state, frames, loop = false, paused = false,
     if (paused) return;
 
     const scaledDuration = Math.max(16, current.duration / speed);
-    timerRef.current = setTimeout(() => {
+    const timer = setTimeout(() => {
       setIndex((i) => (i >= stateFrames.length - 1 ? (isLooping ? 0 : i) : i + 1));
     }, scaledDuration);
 
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
+    return () => clearTimeout(timer);
   }, [index, state, stateFrames, isLooping, paused, speed]);
 
   const currentFrame = stateFrames[index] ?? stateFrames[0] ?? null;
