@@ -10,8 +10,10 @@ import { useSpritePreview } from './useSpritePreview';
 import { MAX_POWER } from './types';
 import { useSpriteRegistry } from './spriteRegistry';
 import { useSpriteLayout, type Vec2, type Size, type Slot } from './useSpriteLayout';
-import { ChevronDown, ChevronUp, PackageOpen, Gauge, Pencil, Zap, SlidersHorizontal } from 'lucide-react';
+import { ChevronDown, ChevronUp, PackageOpen, Gauge, Pencil, Zap, SlidersHorizontal, Download, Film, LayoutGrid, Loader2 } from 'lucide-react';
 import { FrameEditor } from './FrameEditor';
+import { exportSprite, downloadBlob, type ExportFormat, type ExportSlot } from './spriteExport';
+import type { StateFrameMap } from './useFrameAnimation';
 
 export function BattleScreen() {
   const {
@@ -29,6 +31,10 @@ export function BattleScreen() {
   const [showPicker, setShowPicker] = useState(false);
   const [editingSide, setEditingSide] = useState<'left' | 'right' | null>(null);
   const [editingFrames, setEditingFrames] = useState<'cyclops' | 'medusa' | null>(null);
+  const [exportSlot, setExportSlot] = useState<ExportSlot | null>(null);
+  const [exporting, setExporting] = useState<ExportSlot | null>(null);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const { overrides } = useSpriteRegistry();
   const { layouts, setPosition, setSize, resetPosition } = useSpriteLayout();
@@ -106,6 +112,35 @@ export function BattleScreen() {
   const cyclopsPowerReady = state.cyclopsPower >= MAX_POWER;
   const medusaPowerReady = state.medusaPower >= MAX_POWER;
   const battleOver = state.cyclopsHp <= 0 || state.medusaHp <= 0;
+
+  const handleExport = async (slot: ExportSlot, format: ExportFormat) => {
+    const framesMap: StateFrameMap | undefined = overrides[slot];
+    const idleFrames = framesMap?.idle;
+    if (!idleFrames || idleFrames.length === 0) {
+      setExportError('No idle frames found for this sprite.');
+      return;
+    }
+    setExportSlot(null);
+    setExporting(slot);
+    setExportError(null);
+    try {
+      const result = await exportSprite({
+        frames: idleFrames,
+        width: layouts[slot].size.w,
+        height: layouts[slot].size.h,
+        facing: slot === 'medusa' ? 'right' : 'left',
+        slot,
+        format,
+      });
+      downloadBlob(result.blob, result.filename);
+      setExportMessage(`Downloading ${result.filename}…`);
+      setTimeout(() => setExportMessage(null), 4000);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Export failed unexpectedly.');
+    } finally {
+      setExporting(null);
+    }
+  };
 
   return (
     <div className="flex min-h-screen w-full flex-col items-center justify-start gap-2 bg-[#0c0a08] p-3">
@@ -356,7 +391,74 @@ export function BattleScreen() {
           <SlidersHorizontal size={12} />
           EDIT RIGHT FRAMES
         </button>
+        <button
+          onClick={() => setExportSlot('cyclops')}
+          disabled={!overrides.cyclops}
+          className="flex items-center gap-1.5 rounded-lg border border-emerald-700/50 bg-[#1a1410] px-3 py-2 text-[10px] font-bold tracking-wide text-emerald-200 transition-colors hover:bg-emerald-900/30 disabled:cursor-not-allowed disabled:opacity-30"
+          title={overrides.cyclops ? 'Export idle animation' : 'Upload frames for the left sprite first'}
+        >
+          {exporting === 'cyclops' ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+          EXPORT LEFT
+        </button>
+        <button
+          onClick={() => setExportSlot('medusa')}
+          disabled={!overrides.medusa}
+          className="flex items-center gap-1.5 rounded-lg border border-emerald-700/50 bg-[#1a1410] px-3 py-2 text-[10px] font-bold tracking-wide text-emerald-200 transition-colors hover:bg-emerald-900/30 disabled:cursor-not-allowed disabled:opacity-30"
+          title={overrides.medusa ? 'Export idle animation' : 'Upload frames for the right sprite first'}
+        >
+          {exporting === 'medusa' ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+          EXPORT RIGHT
+        </button>
       </div>
+
+      {exportMessage && (
+        <p className="flex items-center gap-1.5 text-[11px] text-emerald-300"><Download size={11} /> {exportMessage}</p>
+      )}
+      {exportError && (
+        <p className="flex items-center gap-1.5 text-[11px] text-red-300">{exportError}</p>
+      )}
+
+      {exportSlot && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+          <div className="relative w-full max-w-sm rounded-xl border border-emerald-900/50 bg-[#1a1410] p-5 shadow-2xl">
+            <button
+              onClick={() => setExportSlot(null)}
+              className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full border border-amber-700/50 text-amber-300 hover:bg-amber-900/40"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+            <h3 className="font-display text-sm font-bold tracking-wide text-emerald-200">
+              Export {exportSlot === 'cyclops' ? 'Left' : 'Right'} Idle Animation
+            </h3>
+            <p className="mt-1 text-[11px] leading-snug text-amber-100/50">
+              Choose a format. Both bake in your alignment tweaks and use a transparent background.
+            </p>
+            <div className="mt-4 flex flex-col gap-2">
+              <button
+                onClick={() => handleExport(exportSlot, 'gif')}
+                className="flex items-start gap-3 rounded-lg border border-emerald-700/40 bg-[#221a14] p-3 text-left transition-colors hover:bg-emerald-900/30"
+              >
+                <Film size={18} className="mt-0.5 text-emerald-300" />
+                <div>
+                  <div className="text-[12px] font-bold tracking-wide text-emerald-200">ANIMATED GIF</div>
+                  <div className="text-[10px] text-amber-100/50">A single looping file of the idle animation. Plays on any website.</div>
+                </div>
+              </button>
+              <button
+                onClick={() => handleExport(exportSlot, 'sheet')}
+                className="flex items-start gap-3 rounded-lg border border-emerald-700/40 bg-[#221a14] p-3 text-left transition-colors hover:bg-emerald-900/30"
+              >
+                <LayoutGrid size={18} className="mt-0.5 text-emerald-300" />
+                <div>
+                  <div className="text-[12px] font-bold tracking-wide text-emerald-200">SPRITE SHEET</div>
+                  <div className="text-[10px] text-amber-100/50">One transparent PNG with all idle frames laid out in a grid.</div>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {editingFrames && (
         <FrameEditor
