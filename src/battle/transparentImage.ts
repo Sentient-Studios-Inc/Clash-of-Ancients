@@ -69,6 +69,14 @@ function stripBackground(
         const hasAlpha = opaqueCount < total * 0.98;
 
         if (hasAlpha) {
+          // The source already has transparency, but it may have keyed out
+          // interior pixels (e.g. black detail inside the sprite that matches
+          // the background colour). Restore those: flood-fill from the edges
+          // through transparent pixels, then any transparent pixel NOT reached
+          // is an enclosed interior hole — set it back to fully opaque so the
+          // inside of the sprite keeps its original colour (typically black)
+          // while only the true outer background stays transparent.
+          fillInteriorHoles(px, w, h);
           const bounds = computeBoundsFromAlpha(px, w, h);
           resolve({ url: canvas.toDataURL('image/png'), bounds });
           return;
@@ -194,6 +202,97 @@ function estimateEdgeBackground(px: Uint8ClampedArray, w: number, h: number): nu
   bs.sort((a, b) => a - b);
   const mid = (a: number[]) => (a.length === 0 ? 0 : a[Math.floor(a.length / 2)]);
   return [mid(rs), mid(gs), mid(bs)];
+}
+
+/**
+ * Restores opaque alpha on transparent pixels that are NOT reachable from the
+ * image border through other transparent pixels — i.e. enclosed interior
+ * holes. The true outer background (connected to the edges) stays transparent,
+ * while interior holes (e.g. black detail inside the sprite that was keyed
+ * out) are set back to fully opaque so the inside of the sprite keeps its
+ * original colour. Uses an iterative flood fill to avoid stack overflow on
+ * large sprites.
+ */
+function fillInteriorHoles(px: Uint8ClampedArray, w: number, h: number): void {
+  const total = w * h;
+  // visited[i] = 1 means pixel i is transparent AND reachable from the border.
+  const visited = new Uint8Array(total);
+  const stack: number[] = [];
+
+  const isTransparent = (i: number) => px[i * 4 + 3] === 0;
+
+  // Seed the flood fill from every transparent pixel on the four borders.
+  for (let x = 0; x < w; x++) {
+    const top = x;
+    const bottom = (h - 1) * w + x;
+    if (isTransparent(top) && !visited[top]) {
+      visited[top] = 1;
+      stack.push(top);
+    }
+    if (isTransparent(bottom) && !visited[bottom]) {
+      visited[bottom] = 1;
+      stack.push(bottom);
+    }
+  }
+  for (let y = 0; y < h; y++) {
+    const left = y * w;
+    const right = y * w + (w - 1);
+    if (isTransparent(left) && !visited[left]) {
+      visited[left] = 1;
+      stack.push(left);
+    }
+    if (isTransparent(right) && !visited[right]) {
+      visited[right] = 1;
+      stack.push(right);
+    }
+  }
+
+  // Iterative 4-connected flood fill through transparent pixels.
+  while (stack.length > 0) {
+    const i = stack.pop()!;
+    const x = i % w;
+    const y = (i / w) | 0;
+    // up
+    if (y > 0) {
+      const n = i - w;
+      if (!visited[n] && isTransparent(n)) {
+        visited[n] = 1;
+        stack.push(n);
+      }
+    }
+    // down
+    if (y < h - 1) {
+      const n = i + w;
+      if (!visited[n] && isTransparent(n)) {
+        visited[n] = 1;
+        stack.push(n);
+      }
+    }
+    // left
+    if (x > 0) {
+      const n = i - 1;
+      if (!visited[n] && isTransparent(n)) {
+        visited[n] = 1;
+        stack.push(n);
+      }
+    }
+    // right
+    if (x < w - 1) {
+      const n = i + 1;
+      if (!visited[n] && isTransparent(n)) {
+        visited[n] = 1;
+        stack.push(n);
+      }
+    }
+  }
+
+  // Any transparent pixel NOT visited is an enclosed interior hole — restore
+  // it to fully opaque so the inside of the sprite keeps its colour.
+  for (let i = 0; i < total; i++) {
+    if (px[i * 4 + 3] === 0 && !visited[i]) {
+      px[i * 4 + 3] = 255;
+    }
+  }
 }
 
 function computeBoundsFromAlpha(px: Uint8ClampedArray, w: number, h: number): ContentBounds {
