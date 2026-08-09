@@ -2,7 +2,6 @@ import type { CreatureState } from './types';
 import { useFrameAnimation, type StateFrameMap, type FrameConfig } from './useFrameAnimation';
 import { FrameSprite } from './FrameSprite';
 import { useSpriteRegistry } from './spriteRegistry';
-import { transparentSrcAsync } from './transparentImage';
 
 const SPRITE_W = 180;
 const SPRITE_H = 200;
@@ -55,16 +54,6 @@ const FRAMES: StateFrameMap = {
   'special-charge': makeFrames('special', 'LICH SPECIAL', 160),
   'special-cast': makeFrames('special', 'LICH SPECIAL', 160),
 };
-
-// Eagerly kick off background stripping for every bundled sprite so the
-// cache is warm before the battle screen renders — prevents a one-frame
-// flash and ordering stutter on the first loop where frames show without
-// ground alignment.
-for (const stateFrames of Object.values(FRAMES)) {
-  for (const f of stateFrames) {
-    if (f.src) void transparentSrcAsync(f.src);
-  }
-}
 
 export { FRAMES as BUNDLED_FRAMES, SPRITE_W, SPRITE_H };
 
