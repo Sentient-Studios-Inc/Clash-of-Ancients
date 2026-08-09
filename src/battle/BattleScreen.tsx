@@ -10,9 +10,8 @@ import { useSpritePreview } from './useSpritePreview';
 import { MAX_POWER } from './types';
 import { useSpriteRegistry } from './spriteRegistry';
 import { useSpriteLayout, type Vec2, type Size, type Slot } from './useSpriteLayout';
-import { ChevronDown, ChevronUp, PackageOpen, Gauge, Pencil, Zap, SlidersHorizontal, Library } from 'lucide-react';
+import { ChevronDown, ChevronUp, PackageOpen, Gauge, Pencil, Zap, SlidersHorizontal } from 'lucide-react';
 import { FrameEditor } from './FrameEditor';
-import { PresetManager } from './PresetManager';
 
 export function BattleScreen() {
   const {
@@ -30,7 +29,6 @@ export function BattleScreen() {
   const [showPicker, setShowPicker] = useState(false);
   const [editingSide, setEditingSide] = useState<'left' | 'right' | null>(null);
   const [editingFrames, setEditingFrames] = useState<'cyclops' | 'medusa' | null>(null);
-  const [managingPresets, setManagingPresets] = useState(false);
 
   const { overrides } = useSpriteRegistry();
   const { layouts, setPosition, setSize, resetPosition } = useSpriteLayout();
@@ -319,13 +317,6 @@ export function BattleScreen() {
           {showPicker ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
         </button>
         <button
-          onClick={() => setManagingPresets(true)}
-          className="flex items-center gap-1.5 rounded-lg border border-amber-700/50 bg-[#2a221b] px-3 py-2 text-[10px] font-bold tracking-wide text-amber-200/80 transition-colors hover:bg-[#3a2e1f]"
-        >
-          <Library size={12} />
-          CHOOSE PRESET
-        </button>
-        <button
           onClick={() => setEditingSide(editingSide ? null : 'left')}
           className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[10px] font-bold tracking-wide transition-colors ${
             editingSide === 'left'
@@ -374,8 +365,6 @@ export function BattleScreen() {
           onClose={() => setEditingFrames(null)}
         />
       )}
-
-      {managingPresets && <PresetManager onClose={() => setManagingPresets(false)} />}
 
       {showPicker && (
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">

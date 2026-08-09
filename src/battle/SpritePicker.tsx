@@ -142,5 +142,3 @@ export function SpritePicker({ slot, label }: SpritePickerProps) {
     </div>
   );
 }
-
-export { SpritePicker }
