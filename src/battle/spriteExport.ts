@@ -223,9 +223,10 @@ async function exportGif(
 
     // Reserve palette slot 0 for transparency and force fully transparent
     // pixels to quantize to it, so the GIF's transparentIndex resolves to a
-    // true transparent slot instead of a near-black opaque color.
+    // true transparent slot instead of a near-black opaque color. In the
+    // packed rgba4444 format a single 0 entry is transparent black (alpha=0).
     const palette = quantize(data, 255, { format: 'rgba4444' });
-    palette.unshift(0, 0, 0, 0);
+    palette.unshift(0);
     const index = applyPalette(data, palette, 'rgba4444');
     for (let p = 0; p < index.length; p++) {
       if (data[p * 4 + 3] === 0) index[p] = 0;
