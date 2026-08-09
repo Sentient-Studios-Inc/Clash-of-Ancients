@@ -89,6 +89,3 @@ export function MedusaLichSprite({ state, showDebug = false, paused = false, spe
     />
   );
 }
-
-
-export { MedusaLichSprite }
